@@ -8,7 +8,7 @@ using TgHelpDesk.Data;
 
 #nullable disable
 
-namespace TgHelpDesk.Migrations
+namespace TgHelpDesk.Data.Migrations
 {
     [DbContext(typeof(TgHelpDeskDbContext))]
     partial class TgHelpDeskDbContextModelSnapshot : ModelSnapshot
@@ -31,19 +31,15 @@ namespace TgHelpDesk.Migrations
                     SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
 
                     b.Property<string>("EntityName")
-                        .IsRequired()
                         .HasColumnType("nvarchar(max)");
 
                     b.Property<string>("KeyValues")
-                        .IsRequired()
                         .HasColumnType("nvarchar(max)");
 
                     b.Property<string>("NewValues")
-                        .IsRequired()
                         .HasColumnType("nvarchar(max)");
 
                     b.Property<string>("OldValues")
-                        .IsRequired()
                         .HasColumnType("nvarchar(max)");
 
                     b.Property<DateTime>("OperatedAt")

@@ -3,14 +3,31 @@ using Microsoft.EntityFrameworkCore.Migrations;
 
 #nullable disable
 
-namespace TgHelpDesk.Migrations
+namespace TgHelpDesk.Data.Migrations
 {
     /// <inheritdoc />
-    public partial class Initial : Migration
+    public partial class Init : Migration
     {
         /// <inheritdoc />
         protected override void Up(MigrationBuilder migrationBuilder)
         {
+            migrationBuilder.CreateTable(
+                name: "HelpRequestsLog",
+                columns: table => new
+                {
+                    Id = table.Column<int>(type: "int", nullable: false)
+                        .Annotation("SqlServer:Identity", "1, 1"),
+                    EntityName = table.Column<string>(type: "nvarchar(max)", nullable: true),
+                    OperatedAt = table.Column<DateTime>(type: "datetime2", nullable: false),
+                    KeyValues = table.Column<string>(type: "nvarchar(max)", nullable: true),
+                    OldValues = table.Column<string>(type: "nvarchar(max)", nullable: true),
+                    NewValues = table.Column<string>(type: "nvarchar(max)", nullable: true)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_HelpRequestsLog", x => x.Id);
+                });
+
             migrationBuilder.CreateTable(
                 name: "TelegramUsers",
                 columns: table => new
@@ -37,7 +54,8 @@ namespace TgHelpDesk.Migrations
                     Text = table.Column<string>(type: "nvarchar(max)", nullable: false),
                     CreationDateTime = table.Column<DateTime>(type: "datetime2", nullable: false),
                     TelegramUserId = table.Column<int>(type: "int", nullable: false),
-                    Priority = table.Column<int>(type: "int", nullable: false)
+                    Priority = table.Column<int>(type: "int", nullable: false),
+                    Status = table.Column<int>(type: "int", nullable: false)
                 },
                 constraints: table =>
                 {
@@ -61,6 +79,9 @@ namespace TgHelpDesk.Migrations
         {
             migrationBuilder.DropTable(
                 name: "HelpRequests");
+
+            migrationBuilder.DropTable(
+                name: "HelpRequestsLog");
 
             migrationBuilder.DropTable(
                 name: "TelegramUsers");

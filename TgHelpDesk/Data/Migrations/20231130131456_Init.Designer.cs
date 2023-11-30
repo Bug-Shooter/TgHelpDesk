@@ -12,8 +12,8 @@ using TgHelpDesk.Data;
 namespace TgHelpDesk.Migrations
 {
     [DbContext(typeof(TgHelpDeskDbContext))]
-    [Migration("20231130082816_3")]
-    partial class _3
+    [Migration("20231130131456_Init")]
+    partial class Init
     {
         /// <inheritdoc />
         protected override void BuildTargetModel(ModelBuilder modelBuilder)
@@ -34,19 +34,15 @@ namespace TgHelpDesk.Migrations
                     SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
 
                     b.Property<string>("EntityName")
-                        .IsRequired()
                         .HasColumnType("nvarchar(max)");
 
                     b.Property<string>("KeyValues")
-                        .IsRequired()
                         .HasColumnType("nvarchar(max)");
 
                     b.Property<string>("NewValues")
-                        .IsRequired()
                         .HasColumnType("nvarchar(max)");
 
                     b.Property<string>("OldValues")
-                        .IsRequired()
                         .HasColumnType("nvarchar(max)");
 
                     b.Property<DateTime>("OperatedAt")
