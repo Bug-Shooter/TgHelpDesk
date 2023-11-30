@@ -1,0 +1,183 @@
+﻿@page "/Panel"
+@using Microsoft.EntityFrameworkCore
+@using TgHelpDesk.Services.Bot
+@using TgHelpDesk.Services.HelpRequests
+@using static TgHelpDesk.Models.Core.HelpRequest
+@inject TgHelpDeskDbContext dbContext;
+@inject BotMethods _botMethods;
+
+<PageTitle>Панель</PageTitle>
+<RadzenButton ButtonStyle="ButtonStyle.Success" Icon="add_circle_outline" class="mt-2 mb-4" Text="Добавить запись" Click="@InsertRow" Disabled=@(requestToInsert != null || requestToUpdate != null) />
+<RadzenDataGrid TItem="HelpRequest" Data="@requests" AllowFiltering="true" FilterMode="FilterMode.Advanced" AllowSorting="true" AllowVirtualization="true" EditMode="DataGridEditMode.Single"
+             RowUpdate="@OnUpdateRow" RowCreate="@OnCreateRow" Sort="@Reset" Page="@Reset" Filter="@Reset" @ref="requestsGrid">
+    <Columns>
+        <RadzenDataGridColumn TItem="HelpRequest" Property="Id" Width="100px" Frozen="true" Title="ID" TextAlign="TextAlign.Center" />
+        <RadzenDataGridColumn TItem="HelpRequest" Property="TelegramUser" Title="Имя" Width="200px" TextAlign="TextAlign.Center">
+            <Template Context="request">
+                @request.TelegramUser.Name (@request.TelegramUser.TgUsername)
+            </Template>
+            <EditTemplate Context="request">
+                <RadzenDropDown @bind-Value="request.TelegramUser" Data="@telegramUsers" Style="width:100%; display: block;">
+                    <Template>
+                        @context.Id @context.Name @context.TgUsername
+                    </Template>
+                </RadzenDropDown>
+            </EditTemplate>
+        </RadzenDataGridColumn>
+        <RadzenDataGridColumn TItem="HelpRequest" Property="Title" Title="Название" Width="200px" TextAlign="TextAlign.Center">
+            <EditTemplate Context="helpRequest">
+                <RadzenTextBox @bind-Value="helpRequest.Title" Style="width:100%; display: block" Name="Title" />
+                <RadzenRequiredValidator Text="Название требуется" Component="Title" Popup="true" />
+            </EditTemplate>
+        </RadzenDataGridColumn>
+        <RadzenDataGridColumn TItem="HelpRequest" Property="Text" Title="Текст">
+            <EditTemplate Context="helpRequest">
+                <RadzenTextBox @bind-Value="helpRequest.Text" Style="width:100%; display: block" Name="Text" />
+                <RadzenRequiredValidator Text="Текст требуется" Component="Text" Popup="true" />
+            </EditTemplate>
+        </RadzenDataGridColumn>
+        <RadzenDataGridColumn TItem="HelpRequest" Property="CreationDateTime" Title="Дата">
+            <EditTemplate Context="helpRequest">
+                <RadzenDatePicker @bind-Value=@helpRequest.CreationDateTime Style="width:100%; display: block" Name="Date" />
+                <RadzenRequiredValidator Text="Дата требуется" Component="Date" Popup="true" />
+            </EditTemplate>
+        </RadzenDataGridColumn>
+        <RadzenDataGridColumn TItem="HelpRequest" Property="Priority" Title="Приоритет">
+            <Template Context="request">
+                @request.GetPriority()
+            </Template>
+            <EditTemplate Context="request">
+                <RadzenDropDown @bind-Value="request.Priority" Data="HelpRequestRadzenData.PriorityList" ValueProperty="Pd" Style="width:100%; display: block;" TextProperty="Title" />
+            </EditTemplate>
+        </RadzenDataGridColumn>
+        <RadzenDataGridColumn TItem="HelpRequest" Property="Status" Title="Статус">
+            <Template Context="request">
+                @request.GetStatus()
+            </Template>
+            <EditTemplate Context="request">
+                <RadzenDropDown @bind-Value="request.Status" Data="HelpRequestRadzenData.StatusList" ValueProperty="Pd" Style="width:100%; display: block;" TextProperty="Title" />
+            </EditTemplate>
+        </RadzenDataGridColumn>
+        <RadzenDataGridColumn TItem="HelpRequest" Context="request" Filterable="false" Sortable="false" TextAlign="TextAlign.Center" Frozen="true" FrozenPosition="FrozenColumnPosition.Right" Width="150px">
+            <Template Context="request">
+                <RadzenButton Icon="edit" ButtonStyle="ButtonStyle.Light" Variant="Variant.Flat" Size="ButtonSize.Medium" Click="@(args => EditRow(request))" @onclick:stopPropagation="true">
+                </RadzenButton>
+                <RadzenButton ButtonStyle="ButtonStyle.Danger" Icon="delete" Variant="Variant.Flat" Shade="Shade.Lighter" Size="ButtonSize.Medium" class="my-1 ms-1" Click="@(args => DeleteRow(request))" @onclick:stopPropagation="true">
+                </RadzenButton>
+            </Template>
+            <EditTemplate Context="request">
+                <RadzenButton Icon="check" ButtonStyle="ButtonStyle.Success" Variant="Variant.Flat" Size="ButtonSize.Medium" Click="@((args) => SaveRow(request))">
+                </RadzenButton>
+                <RadzenButton Icon="close" ButtonStyle="ButtonStyle.Light" Variant="Variant.Flat" Size="ButtonSize.Medium" class="my-1 ms-1" Click="@((args) => CancelEdit(request))">
+                </RadzenButton>
+                <RadzenButton Icon="delete" ButtonStyle="ButtonStyle.Danger" Variant="Variant.Flat" Shade="Shade.Lighter" Size="ButtonSize.Medium" class="my-1 ms-1" Click="@(args => DeleteRow(request))">
+                </RadzenButton>
+            </EditTemplate>
+        </RadzenDataGridColumn>
+    </Columns>
+</RadzenDataGrid>
+
+@code{
+    RadzenDataGrid<HelpRequest> requestsGrid;
+    IEnumerable<HelpRequest> requests;
+
+    IEnumerable<TelegramUser> telegramUsers;
+
+    HelpRequest requestToInsert;
+    HelpRequest requestToUpdate;
+
+    void Reset()
+    {
+        requestToInsert = null;
+        requestToUpdate = null;
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        await base.OnInitializedAsync();
+
+        requests = dbContext.HelpRequests.Include(x=>x.TelegramUser);
+        telegramUsers = dbContext.TelegramUsers;
+    }
+    async Task EditRow(HelpRequest req)
+    {
+        requestToUpdate = req;
+        await requestsGrid.EditRow(req);
+    }
+
+    async Task OnUpdateRow(HelpRequest req)
+    {
+        Reset();
+
+        var orderEntry = dbContext.Entry(req);
+        var OldStatus = orderEntry.OriginalValues.GetValue<_Status>("Status");
+        var OldPriority = orderEntry.OriginalValues.GetValue<_Priority>("Priority");
+
+        //TODO: Вынести ЭТО ОТСЮДА. В КАКОЙ НИБУДЬ СЕРВИС. НЕХУЙ РАБОТАТЬ С БД ИЗ ВИЗУЛА
+        if (req.Status != OldStatus)
+        {
+            await _botMethods.SendMessage($"<b>Статус</b> вашего запроса (#id{req.Id}) <i>\"{req.Title}\"</i> изменен на <i>\"{req.GetStatus()}\"</i>.", req.TelegramUser.ChatId);
+        }
+        if (req.Priority != OldPriority)
+        {
+            await _botMethods.SendMessage($"<b>Приоритет</b> вашего запроса (#id{req.Id}) <i>\"{req.Title}\"</i> изменен на <i>\"{req.GetPriority()}\"</i>.", req.TelegramUser.ChatId);
+        }
+
+        dbContext.Update(req);
+
+        dbContext.SaveChanges();
+    }
+
+    async Task SaveRow(HelpRequest req)
+    {
+        await requestsGrid.UpdateRow(req);
+    }
+
+    void CancelEdit(HelpRequest req)
+    {
+        Reset();
+
+        requestsGrid.CancelEditRow(req);
+
+        var orderEntry = dbContext.Entry(req);
+        if (orderEntry.State == EntityState.Modified)
+        {
+            orderEntry.CurrentValues.SetValues(orderEntry.OriginalValues);
+            orderEntry.State = EntityState.Unchanged;
+        }
+    }
+
+    async Task DeleteRow(HelpRequest req)
+    {
+        Reset();
+
+        if (requests.Contains(req))
+        {
+            dbContext.Remove<HelpRequest>(req);
+
+            dbContext.SaveChanges();
+
+            await requestsGrid.Reload();
+        }
+        else
+        {
+            requestsGrid.CancelEditRow(req);
+            await requestsGrid.Reload();
+        }
+    }
+
+    async Task InsertRow()
+    {
+        requestToInsert = new HelpRequest();
+        await requestsGrid.InsertRow(requestToInsert);
+    }
+
+    void OnCreateRow(HelpRequest req)
+    {
+        dbContext.Add(req);
+
+        dbContext.SaveChanges();
+
+        requestToInsert = null;
+    }
+}

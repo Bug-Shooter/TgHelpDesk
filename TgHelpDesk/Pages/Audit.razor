@@ -1,0 +1,27 @@
+﻿@page "/Panel/Audit"
+@using Microsoft.EntityFrameworkCore
+@using TgHelpDesk.Models.Audit
+@inject TgHelpDeskDbContext dbContext;
+
+<PageTitle>Аудит(в разработке)</PageTitle>
+<RadzenDataGrid TItem="HelpRequestLog" Data="@hrLogs" AllowFiltering="true" FilterMode="FilterMode.Advanced" AllowSorting="true" AllowVirtualization="true" @ref="auditGrid">
+    <Columns>
+        <RadzenDataGridColumn TItem="HelpRequestLog" Property="Id" Width="100px" Frozen="true" Title="ID" TextAlign="TextAlign.Center" />
+        <RadzenDataGridColumn TItem="HelpRequestLog" Property="EntityName" Title="EntityName" TextAlign="TextAlign.Center" />
+        <RadzenDataGridColumn TItem="HelpRequestLog" Property="OperatedAt" Title="OperatedAt" TextAlign="TextAlign.Center"/>
+        <RadzenDataGridColumn TItem="HelpRequestLog" Property="KeyValues" Title="KeyValues" />
+        <RadzenDataGridColumn TItem="HelpRequestLog" Property="OldValues" Title="OldValues" />
+        <RadzenDataGridColumn TItem="HelpRequestLog" Property="NewValues" Title="NewValues" />
+    </Columns>
+</RadzenDataGrid>
+
+@code {
+    RadzenDataGrid<HelpRequestLog> auditGrid;
+    IEnumerable<HelpRequestLog> hrLogs;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await base.OnInitializedAsync();
+        hrLogs = dbContext.HelpRequestsLog;
+    }
+}

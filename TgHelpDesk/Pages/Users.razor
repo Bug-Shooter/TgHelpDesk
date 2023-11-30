@@ -1,0 +1,135 @@
+﻿@page "/Panel/Users"
+@using Microsoft.EntityFrameworkCore
+@inject TgHelpDeskDbContext dbContext;
+
+<PageTitle>Пользователи</PageTitle>
+<RadzenButton ButtonStyle="ButtonStyle.Success" Icon="add_circle_outline" class="mt-2 mb-4" Text="Добавить запись" Click="@InsertRow" Disabled=@(userToInsert != null || userToUpdate != null) />
+<RadzenDataGrid TItem="TelegramUser" Data="@telegramUsers" AllowFiltering="true" FilterMode="FilterMode.Advanced" AllowSorting="true" AllowVirtualization="true" EditMode="DataGridEditMode.Single"
+                RowUpdate="@OnUpdateRow" RowCreate="@OnCreateRow" Sort="@Reset" Page="@Reset" Filter="@Reset" @ref="usersGrid">
+    <Columns>
+        <RadzenDataGridColumn TItem="TelegramUser" Property="Id" Width="100px" Frozen="true" Title="ID" TextAlign="TextAlign.Center" />
+        <RadzenDataGridColumn TItem="TelegramUser" Property="Name" Title="Имя" TextAlign="TextAlign.Center">
+            <EditTemplate Context="tgUser">
+                <RadzenTextBox @bind-Value="tgUser.Name" Style="width:100%; display: block" Name="Name" />
+                <RadzenRequiredValidator Text="Имя требуется" Component="Name" Popup="true" />
+            </EditTemplate>
+        </RadzenDataGridColumn>
+        <RadzenDataGridColumn TItem="TelegramUser" Property="TgUsername" Title="TgUsername" TextAlign="TextAlign.Center">
+            <EditTemplate Context="tgUser">
+                <RadzenTextBox @bind-Value="tgUser.TgUsername" Style="width:100%; display: block" Name="TgUsername" />
+                <RadzenRequiredValidator Text="TgUsername требуется" Component="TgUsername" Popup="true" />
+            </EditTemplate>
+        </RadzenDataGridColumn>
+        <RadzenDataGridColumn TItem="TelegramUser" Property="TelegramId" Title="TelegramId">
+            <EditTemplate Context="tgUser">
+                <RadzenNumeric @bind-Value="tgUser.TelegramId" Style="width:100%; display: block" Name="TelegramId" />
+                <RadzenRequiredValidator Text="TelegramId требуется" Component="TelegramId" Popup="true" />
+            </EditTemplate>
+        </RadzenDataGridColumn>
+        <RadzenDataGridColumn TItem="TelegramUser" Property="ChatId" Title="ChatId">
+            <EditTemplate Context="tgUser">
+                <RadzenNumeric @bind-Value="tgUser.ChatId" Style="width:100%; display: block" Name="ChatId" />
+                <RadzenRequiredValidator Text="ChatId требуется" Component="ChatId" Popup="true" />
+            </EditTemplate>
+        </RadzenDataGridColumn>
+        <RadzenDataGridColumn TItem="TelegramUser" Context="request" Filterable="false" Sortable="false" TextAlign="TextAlign.Right" Frozen="true" FrozenPosition="FrozenColumnPosition.Right" Width="150px">
+            <Template Context="request">
+                <RadzenButton Icon="edit" ButtonStyle="ButtonStyle.Light" Variant="Variant.Flat" Size="ButtonSize.Medium" Click="@(args => EditRow(request))" @onclick:stopPropagation="true">
+                </RadzenButton>
+                <RadzenButton ButtonStyle="ButtonStyle.Danger" Icon="delete" Variant="Variant.Flat" Shade="Shade.Lighter" Size="ButtonSize.Medium" class="my-1 ms-1" Click="@(args => DeleteRow(request))" @onclick:stopPropagation="true">
+                </RadzenButton>
+            </Template>
+            <EditTemplate Context="request">
+                <RadzenButton Icon="check" ButtonStyle="ButtonStyle.Success" Variant="Variant.Flat" Size="ButtonSize.Medium" Click="@((args) => SaveRow(request))">
+                </RadzenButton>
+                <RadzenButton Icon="close" ButtonStyle="ButtonStyle.Light" Variant="Variant.Flat" Size="ButtonSize.Medium" class="my-1 ms-1" Click="@((args) => CancelEdit(request))">
+                </RadzenButton>
+                <RadzenButton ButtonStyle="ButtonStyle.Danger" Icon="delete" Variant="Variant.Flat" Shade="Shade.Lighter" Size="ButtonSize.Medium" class="my-1 ms-1" Click="@(args => DeleteRow(request))">
+                </RadzenButton>
+            </EditTemplate>
+        </RadzenDataGridColumn>
+    </Columns>
+</RadzenDataGrid>
+
+@code {
+    RadzenDataGrid<TelegramUser> usersGrid;
+    IEnumerable<TelegramUser> telegramUsers;
+
+    TelegramUser userToInsert;
+    TelegramUser userToUpdate;
+
+    void Reset()
+    {
+        userToInsert = null;
+        userToUpdate = null;
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        await base.OnInitializedAsync();
+        telegramUsers = dbContext.TelegramUsers;
+    }
+    async Task EditRow(TelegramUser req)
+    {
+        userToUpdate = req;
+        await usersGrid.EditRow(req);
+    }
+
+    void OnUpdateRow(TelegramUser req)
+    {
+        Reset();
+        dbContext.Update(req);
+        dbContext.SaveChanges();
+    }
+
+    async Task SaveRow(TelegramUser req)
+    {
+        await usersGrid.UpdateRow(req);
+    }
+
+    void CancelEdit(TelegramUser req)
+    {
+        Reset();
+        usersGrid.CancelEditRow(req);
+
+        var orderEntry = dbContext.Entry(req);
+        if (orderEntry.State == EntityState.Modified)
+        {
+            orderEntry.CurrentValues.SetValues(orderEntry.OriginalValues);
+            orderEntry.State = EntityState.Unchanged;
+        }
+    }
+
+    async Task DeleteRow(TelegramUser req)
+    {
+        Reset();
+        if (telegramUsers.Contains(req))
+        {
+            dbContext.Remove<TelegramUser>(req);
+
+            dbContext.SaveChanges();
+
+            await usersGrid.Reload();
+        }
+        else
+        {
+            usersGrid.CancelEditRow(req);
+            await usersGrid.Reload();
+        }
+    }
+
+    async Task InsertRow()
+    {
+        userToInsert = new TelegramUser();
+        await usersGrid.InsertRow(userToInsert);
+    }
+
+    void OnCreateRow(TelegramUser req)
+    {
+        dbContext.Add(req);
+
+        dbContext.SaveChanges();
+
+        userToInsert = null;
+    }
+}

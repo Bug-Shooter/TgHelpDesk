@@ -1,0 +1,50 @@
+﻿
+
+<h1 class="mt-3 fw-lighter text-center">Создание Заявки</h1>
+<hr class="m-1 mx-5" />
+
+
+<div class="mb-3 ms-2 me-4">
+    <label for="inputTitle" class="form-label fs-4 fw-lighter">Название</label>
+    <input class="form-select" id="inputTitle" type="text">
+    <small>В 3 словах опишите с чем проблема. Например "Рутокен"</small>
+</div>
+<div class="mb-3 ms-2 me-4">
+    <label for="inputDescription" class="form-label fs-4 fw-lighter">Приоритет проблемы:</label>
+    <select class="form-select" id="inputPriority">
+        <option value="1" selected>Низкий</option>
+        <option value="2">Средний</option>
+        <option value="3">Высокий</option>
+    </select>
+</div>
+<div class="mb-3 ms-2 me-4">
+    <label for="inputDescription" class="form-label fs-4 fw-lighter">Описание проблемы:</label>
+    <textarea class="form-control" id="inputDescription" rows="6"></textarea>
+</div>
+
+<div class="mb-3 ms-2 me-4">
+    @foreach(string tag in Tags.tags)
+    {
+        <button type="button" class="btn rounded rounded-pill btn-primary tag m-1 mb-2">@tag</button>
+    }
+</div>
+
+<script>
+    document.addEventListener("DOMContentLoaded", () => {
+        tg.MainButton.text = "Отправить";
+        tg.MainButton.isVisible = true;
+        tg.MainButton.onClick(SendHelpRequest)
+
+        const tags = document.getElementsByClassName("tag");
+        Array.from(tags).forEach(tag => {
+            tag.addEventListener("click", () => {
+                tagClick(tag.textContent);
+                tag.blur();
+            });
+        });
+    });
+</script>
+
+@{
+
+}
