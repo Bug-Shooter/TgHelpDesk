@@ -9,7 +9,7 @@ using TgHelpDesk.Data;
 
 #nullable disable
 
-namespace TgHelpDesk.Migrations
+namespace TgHelpDesk.Data.Migrations
 {
     [DbContext(typeof(TgHelpDeskDbContext))]
     [Migration("20231130131456_Init")]
