@@ -29,6 +29,16 @@ namespace TgHelpDesk.Services.Bot
                 parseMode: ParseMode.Html,
                 cancellationToken: cancellationToken);
         }
+
+        public async Task<Message> SendReplyMsg(string text, long ChatId, int ReplyMsgId, CancellationToken cancellationToken = default(CancellationToken))
+        {
+            return await _botClient.SendTextMessageAsync(
+                chatId: ChatId,
+                text: text,
+                replyToMessageId: ReplyMsgId,
+                cancellationToken: cancellationToken);
+        }
+         
         public async Task SendLogMsg(string text)
         {
             await _botClient.SendTextMessageAsync(

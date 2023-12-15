@@ -66,8 +66,15 @@ namespace TgHelpDesk.Services.Bot
         private async Task BotOnMessageReceived(Message message, CancellationToken cancellationToken)
         {
             _logger.LogInformation("Receive message type: {MessageType}", message.Type);
+            if (message.Chat.IsForum == true)
+            {
+                _ = BotNotForChatUsage(message, _botMethods, cancellationToken);
+                return;
+            }
+
             if (message.Text is not { } messageText)
                 return;
+
 
             var action = messageText.Split(' ')[0] switch
             {
@@ -282,6 +289,10 @@ namespace TgHelpDesk.Services.Bot
                 //                     "/inline_mode - send keyboard with Inline Query";
 
                 return await botMethods.SendMessageAsync("Неизвестная команда", message.Chat.Id, cancellationToken);
+            }
+            static async Task<Message> BotNotForChatUsage(Message message, BotMethods botMethods, CancellationToken cancellationToken)
+            {
+                return await botMethods.SendReplyMsg("Бот не может работать в групповых чатах и форумах", message.Chat.Id, message.MessageId, cancellationToken);
             }
 
             //static async Task<Message> StartInlineQuery(ITelegramBotClient botClient, Message message, CancellationToken cancellationToken)
