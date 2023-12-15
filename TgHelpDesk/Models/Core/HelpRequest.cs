@@ -20,9 +20,9 @@ namespace TgHelpDesk.Models.Core
             Medium,
             High
         }
-        public string GetPriority()
+        public static string GetPriority(_Priority priority)
         {
-            switch (Priority)
+            switch (priority)
             {
                 case _Priority.Low:
                     return "Низкий";
@@ -44,9 +44,9 @@ namespace TgHelpDesk.Models.Core
             InWork,
             Completed
         }
-        public string GetStatus()
+        public static string GetStatus(_Status status)
         {
-            switch (Status)
+            switch (status)
             {
                 case _Status.Received:
                     return "Получена";
@@ -63,7 +63,7 @@ namespace TgHelpDesk.Models.Core
 
     public static class HelpRequestRadzenData //Сервисный класс. нужен для отображения в Radzen.
     {
-        public static readonly IEnumerable<PriorityElement> PriorityList = new[]
+        public static readonly IEnumerable<PriorityElement> PriorityList = new[] //ПОПРОБОВАТЬ ЗАМЕНИТЬ НА DICTIONARY
 {
             new PriorityElement { Pd = _Priority.Low, Title = "Низкий"},
             new PriorityElement { Pd = _Priority.Medium, Title = "Средний"},

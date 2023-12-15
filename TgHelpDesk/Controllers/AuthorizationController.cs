@@ -5,8 +5,8 @@ using System.Text;
 using System.Text.Json;
 using System.Web;
 using TgHelpDesk.Models.Authorization;
-using TgHelpDesk.Models.Service;
 using TgHelpDesk.Models.Statics;
+using TgHelpDesk.Services.Bot;
 using TgHelpDesk.Services.TgUsers;
 
 namespace TgHelpDesk.Controllers

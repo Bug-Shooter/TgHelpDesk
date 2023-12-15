@@ -3,7 +3,6 @@ using System.Threading;
 using Telegram.Bot;
 using Telegram.Bot.Types.ReplyMarkups;
 using Telegram.Bot.Types;
-using TgHelpDesk.Models.Service;
 using TgHelpDesk.Services.TgUsers;
 using Telegram.Bot.Types.Enums;
 
@@ -22,12 +21,35 @@ namespace TgHelpDesk.Services.Bot
             _botConfiguration = botOptions.Value;
         }
 
-        public async Task SendMessage(string text, long ChatId)
+        public async Task<Message> SendMessageAsync(string text, long ChatId, CancellationToken cancellationToken = default(CancellationToken))
         {
-            await _botClient.SendTextMessageAsync(
+            return await _botClient.SendTextMessageAsync(
                 chatId: ChatId,
                 text: text,
+                parseMode: ParseMode.Html,
+                cancellationToken: cancellationToken);
+        }
+        public async Task SendLogMsg(string text)
+        {
+            await _botClient.SendTextMessageAsync(
+                chatId: _botConfiguration.LoggerChatId,
+                text: text,
+                messageThreadId: _botConfiguration.LoggerReplyMsg,
                 parseMode: ParseMode.Html);
+        }
+        public async Task SetMenuButton(long chatId, CancellationToken cancellationToken = default(CancellationToken))
+        {
+            await _botClient.SetChatMenuButtonAsync
+                 (chatId: chatId,
+                   menuButton: new MenuButtonWebApp
+                   {
+                       Text = "Новый Запрос",
+                       WebApp = new WebAppInfo()
+                       {
+                           Url = _botConfiguration.HostAddress,
+                       }
+                   },
+                   cancellationToken: cancellationToken);
         }
     }
 }

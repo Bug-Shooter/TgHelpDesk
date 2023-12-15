@@ -1,20 +1,27 @@
 using Microsoft.AspNetCore.Authentication.JwtBearer;
-using Microsoft.AspNetCore.Authorization;
-using Microsoft.AspNetCore.Components;
-using Microsoft.AspNetCore.Components.Web;
+using Microsoft.AspNetCore.DataProtection;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Configuration;
 using Microsoft.IdentityModel.Tokens;
+using Radzen;
 using Telegram.Bot;
 using TgHelpDesk.Controllers;
 using TgHelpDesk.Data;
-using TgHelpDesk.Models.Service;
+using TgHelpDesk.Models.Core;
 using TgHelpDesk.Models.Statics;
+using TgHelpDesk.Models.Users;
+using TgHelpDesk.Repositories;
+using TgHelpDesk.Repositories.Interface;
 using TgHelpDesk.Services.Bot;
-using TgHelpDesk.Services.HelpRequests;
+using TgHelpDesk.Services.Notification;
+using TgHelpDesk.Services.Notification.Interfaces;
 using TgHelpDesk.Services.TgUsers;
 
 var builder = WebApplication.CreateBuilder(args);
+
+#region DataProtection (ProdOnly)
+builder.Services.AddDataProtection()
+    .PersistKeysToFileSystem(new DirectoryInfo(@"/www/TgHelpDest_DataProtectionKeys")); //TODO: Вынести в JSON
+#endregion
 
 #region SQL
 // Add services to the container.
@@ -74,8 +81,11 @@ builder.Services.AddSession(options =>
 #region OtherServices
 // Add services to the container.
 builder.Services.AddTransient<TgUsersService>();
-builder.Services.AddTransient<HelpRequestsService>();
-builder.Services.AddTransient<BotMethods>();
+builder.Services.AddTransient<IRepository<HelpRequest>,HelpRequestRepository>();
+builder.Services.AddTransient<IRepository<TelegramUser>,TelegramUserRepository>();
+builder.Services.AddScoped<BotMethods>();
+builder.Services.AddScoped<INotificationService<HelpRequest>, MainNotificationService>();
+builder.Services.AddRadzenComponents();
 #endregion
 
 builder.Services.AddControllersWithViews();

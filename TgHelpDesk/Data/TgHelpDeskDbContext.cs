@@ -2,6 +2,7 @@
 using TgHelpDesk.Models.Audit;
 using TgHelpDesk.Models.Core;
 using TgHelpDesk.Models.Users;
+using TgHelpDesk.Services.Bot;
 
 namespace TgHelpDesk.Data
 {
@@ -12,8 +13,7 @@ namespace TgHelpDesk.Data
         public DbSet<TelegramUser> TelegramUsers { get; set; }
         public TgHelpDeskDbContext(DbContextOptions<TgHelpDeskDbContext> options) : base(options)
         {
-            //Database.EnsureDeleted();
-            Database.Migrate();
+            //Database.Migrate();
         }
         public override int SaveChanges()
         {
@@ -40,8 +40,6 @@ namespace TgHelpDesk.Data
                 //исключаем сущности и состояния из логирования
                 if (entry.Entity is HelpRequestLog || entry.State == EntityState.Detached || entry.State == EntityState.Unchanged)              
                     continue;
-                
-
 
                 var auditEntry = new AuditEntry(entry)
                 {

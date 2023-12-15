@@ -30,5 +30,6 @@ namespace TgHelpDesk.Models.Audit
                 NewValues = NewValues.Count == 0 ? null : JsonConvert.SerializeObject(NewValues)
             };
         }
+        
     }
 }

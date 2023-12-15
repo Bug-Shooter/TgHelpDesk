@@ -1,15 +1,17 @@
 ﻿@page "/Panel"
 @using Microsoft.EntityFrameworkCore
+@using TgHelpDesk.Repositories.Interface
 @using TgHelpDesk.Services.Bot
-@using TgHelpDesk.Services.HelpRequests
 @using static TgHelpDesk.Models.Core.HelpRequest
-@inject TgHelpDeskDbContext dbContext;
+@inject DialogService DialogService
+@inject IRepository<HelpRequest> HelpReqRepos;
+@inject IRepository<TelegramUser> TgUserRepos;
 @inject BotMethods _botMethods;
 
 <PageTitle>Панель</PageTitle>
 <RadzenButton ButtonStyle="ButtonStyle.Success" Icon="add_circle_outline" class="mt-2 mb-4" Text="Добавить запись" Click="@InsertRow" Disabled=@(requestToInsert != null || requestToUpdate != null) />
 <RadzenDataGrid TItem="HelpRequest" Data="@requests" AllowFiltering="true" FilterMode="FilterMode.Advanced" AllowSorting="true" AllowVirtualization="true" EditMode="DataGridEditMode.Single"
-             RowUpdate="@OnUpdateRow" RowCreate="@OnCreateRow" Sort="@Reset" Page="@Reset" Filter="@Reset" @ref="requestsGrid">
+             RowUpdate="@OnUpdateRow" RowCreate="@OnCreateRow" Sort="@Reset" Page="@Reset" Filter="@Reset" @ref="requestsGrid" RowDoubleClick="@(x=>ShowInlineDialog(x.Data))">
     <Columns>
         <RadzenDataGridColumn TItem="HelpRequest" Property="Id" Width="100px" Frozen="true" Title="ID" TextAlign="TextAlign.Center" />
         <RadzenDataGridColumn TItem="HelpRequest" Property="TelegramUser" Title="Имя" Width="200px" TextAlign="TextAlign.Center">
@@ -44,7 +46,7 @@
         </RadzenDataGridColumn>
         <RadzenDataGridColumn TItem="HelpRequest" Property="Priority" Title="Приоритет">
             <Template Context="request">
-                @request.GetPriority()
+                @GetPriority(request.Priority)
             </Template>
             <EditTemplate Context="request">
                 <RadzenDropDown @bind-Value="request.Priority" Data="HelpRequestRadzenData.PriorityList" ValueProperty="Pd" Style="width:100%; display: block;" TextProperty="Title" />
@@ -52,7 +54,7 @@
         </RadzenDataGridColumn>
         <RadzenDataGridColumn TItem="HelpRequest" Property="Status" Title="Статус">
             <Template Context="request">
-                @request.GetStatus()
+                @GetStatus(request.Status)
             </Template>
             <EditTemplate Context="request">
                 <RadzenDropDown @bind-Value="request.Status" Data="HelpRequestRadzenData.StatusList" ValueProperty="Pd" Style="width:100%; display: block;" TextProperty="Title" />
@@ -60,18 +62,13 @@
         </RadzenDataGridColumn>
         <RadzenDataGridColumn TItem="HelpRequest" Context="request" Filterable="false" Sortable="false" TextAlign="TextAlign.Center" Frozen="true" FrozenPosition="FrozenColumnPosition.Right" Width="150px">
             <Template Context="request">
-                <RadzenButton Icon="edit" ButtonStyle="ButtonStyle.Light" Variant="Variant.Flat" Size="ButtonSize.Medium" Click="@(args => EditRow(request))" @onclick:stopPropagation="true">
-                </RadzenButton>
-                <RadzenButton ButtonStyle="ButtonStyle.Danger" Icon="delete" Variant="Variant.Flat" Shade="Shade.Lighter" Size="ButtonSize.Medium" class="my-1 ms-1" Click="@(args => DeleteRow(request))" @onclick:stopPropagation="true">
-                </RadzenButton>
+                <RadzenButton Icon="edit" ButtonStyle="ButtonStyle.Light" Variant="Variant.Flat" Size="ButtonSize.Medium" Click="@(args => EditRow(request))" @onclick:stopPropagation="true"/>
+                <RadzenButton ButtonStyle="ButtonStyle.Danger" Icon="delete" Variant="Variant.Flat" Shade="Shade.Lighter" Size="ButtonSize.Medium" class="my-1 ms-1" Click="@(args => DeleteRow(request))" @onclick:stopPropagation="true"/>
             </Template>
             <EditTemplate Context="request">
-                <RadzenButton Icon="check" ButtonStyle="ButtonStyle.Success" Variant="Variant.Flat" Size="ButtonSize.Medium" Click="@((args) => SaveRow(request))">
-                </RadzenButton>
-                <RadzenButton Icon="close" ButtonStyle="ButtonStyle.Light" Variant="Variant.Flat" Size="ButtonSize.Medium" class="my-1 ms-1" Click="@((args) => CancelEdit(request))">
-                </RadzenButton>
-                <RadzenButton Icon="delete" ButtonStyle="ButtonStyle.Danger" Variant="Variant.Flat" Shade="Shade.Lighter" Size="ButtonSize.Medium" class="my-1 ms-1" Click="@(args => DeleteRow(request))">
-                </RadzenButton>
+                <RadzenButton Icon="check" ButtonStyle="ButtonStyle.Success" Variant="Variant.Flat" Size="ButtonSize.Medium" Click="@((args) => SaveRow(request))"/>
+                <RadzenButton Icon="close" ButtonStyle="ButtonStyle.Light" Variant="Variant.Flat" Size="ButtonSize.Medium" class="my-1 ms-1" Click="@((args) => CancelEdit(request))"/>
+@*                 <RadzenButton Icon="delete" ButtonStyle="ButtonStyle.Danger" Variant="Variant.Flat" Shade="Shade.Lighter" Size="ButtonSize.Medium" class="my-1 ms-1" Click="@(args => DeleteRow(request))"/> *@
             </EditTemplate>
         </RadzenDataGridColumn>
     </Columns>
@@ -80,11 +77,10 @@
 @code{
     RadzenDataGrid<HelpRequest> requestsGrid;
     IEnumerable<HelpRequest> requests;
-
     IEnumerable<TelegramUser> telegramUsers;
 
-    HelpRequest requestToInsert;
-    HelpRequest requestToUpdate;
+    HelpRequest? requestToInsert;
+    HelpRequest? requestToUpdate;
 
     void Reset()
     {
@@ -92,45 +88,25 @@
         requestToUpdate = null;
     }
 
-    protected override async Task OnInitializedAsync()
+    protected override void OnInitialized()
     {
-        await base.OnInitializedAsync();
+        base.OnInitialized();
 
-        requests = dbContext.HelpRequests.Include(x=>x.TelegramUser);
-        telegramUsers = dbContext.TelegramUsers;
+        requests = HelpReqRepos.AsEnumerable();
+        telegramUsers = TgUserRepos.AsEnumerable();
+
+        Console.WriteLine("Started");
+    }
+
+    async Task InsertRow()
+    {
+        requestToInsert = new HelpRequest();
+        await requestsGrid.InsertRow(requestToInsert);
     }
     async Task EditRow(HelpRequest req)
     {
         requestToUpdate = req;
-        await requestsGrid.EditRow(req);
-    }
-
-    async Task OnUpdateRow(HelpRequest req)
-    {
-        Reset();
-
-        var orderEntry = dbContext.Entry(req);
-        var OldStatus = orderEntry.OriginalValues.GetValue<_Status>("Status");
-        var OldPriority = orderEntry.OriginalValues.GetValue<_Priority>("Priority");
-
-        //TODO: Вынести ЭТО ОТСЮДА. В КАКОЙ НИБУДЬ СЕРВИС. НЕХУЙ РАБОТАТЬ С БД ИЗ ВИЗУЛА
-        if (req.Status != OldStatus)
-        {
-            await _botMethods.SendMessage($"<b>Статус</b> вашего запроса (#id{req.Id}) <i>\"{req.Title}\"</i> изменен на <i>\"{req.GetStatus()}\"</i>.", req.TelegramUser.ChatId);
-        }
-        if (req.Priority != OldPriority)
-        {
-            await _botMethods.SendMessage($"<b>Приоритет</b> вашего запроса (#id{req.Id}) <i>\"{req.Title}\"</i> изменен на <i>\"{req.GetPriority()}\"</i>.", req.TelegramUser.ChatId);
-        }
-
-        dbContext.Update(req);
-
-        dbContext.SaveChanges();
-    }
-
-    async Task SaveRow(HelpRequest req)
-    {
-        await requestsGrid.UpdateRow(req);
+        await requestsGrid.EditRow(requestToUpdate);
     }
 
     void CancelEdit(HelpRequest req)
@@ -139,24 +115,37 @@
 
         requestsGrid.CancelEditRow(req);
 
-        var orderEntry = dbContext.Entry(req);
+        var orderEntry = HelpReqRepos.Entry(req);
         if (orderEntry.State == EntityState.Modified)
         {
             orderEntry.CurrentValues.SetValues(orderEntry.OriginalValues);
             orderEntry.State = EntityState.Unchanged;
         }
     }
+    async Task SaveRow(HelpRequest req)
+    {
+        await requestsGrid.UpdateRow(req);
+    }
 
+    //////////////////////////////////////////////
+
+    void OnCreateRow(HelpRequest req)
+    {
+        Reset();
+        HelpReqRepos.Create(req);
+    }
+    void OnUpdateRow(HelpRequest req)
+    {
+        Reset();
+        HelpReqRepos.Update(req);
+    }
     async Task DeleteRow(HelpRequest req)
     {
         Reset();
 
         if (requests.Contains(req))
         {
-            dbContext.Remove<HelpRequest>(req);
-
-            dbContext.SaveChanges();
-
+            HelpReqRepos.Delete(req.Id);
             await requestsGrid.Reload();
         }
         else
@@ -166,18 +155,36 @@
         }
     }
 
-    async Task InsertRow()
+    //////////////////////////////////////////////
+
+    async Task ShowInlineDialog(HelpRequest request)
     {
-        requestToInsert = new HelpRequest();
-        await requestsGrid.InsertRow(requestToInsert);
-    }
-
-    void OnCreateRow(HelpRequest req)
-    {
-        dbContext.Add(req);
-
-        dbContext.SaveChanges();
-
-        requestToInsert = null;
+        var Title = "Название:" + request.Title;
+        var result = await DialogService.OpenAsync(Title, ds =>
+        @<RadzenStack>
+            <RadzenText TextStyle="TextStyle.H5" class="rz-color-on-primary-light" TextAlign=TextAlign.Center><strong>@request.Title</strong></RadzenText>
+            <RadzenText TextStyle="TextStyle.Overline" class="rz-color-on-primary-light rz-display-flex rz-mt-4 rz-mb-0">Отправитель</RadzenText>
+            <RadzenText TextStyle="TextStyle.Body1" class="rz-color-on-primary-light"><b>@request.TelegramUser.Name (@request.TelegramUser.TgUsername)</b></RadzenText>
+            <hr />
+            <RadzenText TextStyle="TextStyle.Overline" class="rz-color-on-primary-light rz-display-flex rz-mt-4 rz-mb-0">Описание</RadzenText>
+            <RadzenText TextStyle="TextStyle.Body1" class="rz-color-on-primary-light"><b>@(request.Text)</b></RadzenText>
+            <RadzenText TextStyle="TextStyle.Overline" class="rz-color-on-primary-light rz-display-flex rz-mt-4 rz-mb-0">Дата Создания</RadzenText>
+            <RadzenText TextStyle="TextStyle.Body1" class="rz-color-on-primary-light"><b>@(request.CreationDateTime)</b></RadzenText>
+            <RadzenText TextStyle="TextStyle.Overline" class="rz-color-on-primary-light rz-display-flex rz-mt-4 rz-mb-0">Статус</RadzenText>
+            <RadzenText TextStyle="TextStyle.Body1" class="rz-color-on-primary-light"><b>@(HelpRequest.GetStatus(request.Status))</b></RadzenText>
+            <RadzenText TextStyle="TextStyle.Overline" class="rz-color-on-primary-light rz-display-flex rz-mt-4 rz-mb-0">Приоритет</RadzenText>
+            <RadzenText TextStyle="TextStyle.Body1" class="rz-color-on-primary-light"><b>@(HelpRequest.GetPriority(request.Priority))</b></RadzenText>
+         </RadzenStack>,
+        new DialogOptions()
+        {
+            CloseDialogOnEsc = true,
+            CloseDialogOnOverlayClick = true,
+            ShowClose = false,
+            ShowTitle = false,
+            Draggable = false,
+            Height = "auto",
+            Width = "600px",
+            CssClass = "rz-background-color-primary-light"
+        });
     }
 }

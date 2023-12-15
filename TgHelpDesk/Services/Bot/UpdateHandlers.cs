@@ -5,24 +5,29 @@ using Telegram.Bot.Types.ReplyMarkups;
 using Telegram.Bot.Types;
 using Telegram.Bot;
 using Microsoft.Extensions.Options;
-using TgHelpDesk.Models.Service;
+using TgHelpDesk.Services.Bot;
+using TgHelpDesk.Models.Core;
 using TgHelpDesk.Services.TgUsers;
+using TgHelpDesk.Data;
+using Microsoft.EntityFrameworkCore;
+using System.Linq.Dynamic.Core;
+using System.Text;
 
 namespace TgHelpDesk.Services.Bot
 {
     public class UpdateHandlers
     {
-        private readonly ITelegramBotClient _botClient;
         private readonly ILogger<UpdateHandlers> _logger;
-        private readonly BotConfiguration _botConfiguration;
         private readonly TgUsersService _tgUsersService;
+        private readonly TgHelpDeskDbContext _dbContext;
+        private readonly BotMethods _botMethods;
 
-        public UpdateHandlers(ITelegramBotClient botClient, ILogger<UpdateHandlers> logger, IOptions<BotConfiguration> botOptions, TgUsersService tgUsersService)
+        public UpdateHandlers(ILogger<UpdateHandlers> logger, BotMethods botMethods, TgUsersService tgUsersService, TgHelpDeskDbContext dbContext)
         {
-            _botClient = botClient;
-            _logger = logger;
-            _botConfiguration = botOptions.Value;
             _tgUsersService = tgUsersService;
+            _dbContext = dbContext;
+            _logger = logger;
+            _botMethods = botMethods;
         }
 
         public Task HandleErrorAsync(Exception exception, CancellationToken cancellationToken)
@@ -33,7 +38,7 @@ namespace TgHelpDesk.Services.Bot
                 _ => exception.ToString()
             };
 
-            _logger.LogInformation("HandleError: {ErrorMessage}", ErrorMessage);
+            _logger.LogInformation("HandledError: {ErrorMessage}", ErrorMessage);
             return Task.CompletedTask;
         }
 
@@ -66,21 +71,22 @@ namespace TgHelpDesk.Services.Bot
 
             var action = messageText.Split(' ')[0] switch
             {
-                "/start" => SendStartMessage(_botClient, _tgUsersService, message, _botConfiguration, cancellationToken),
-                "/help" => Help(_botClient, message, cancellationToken),
-                //"/status" => Status(_botClient, message, cancellationToken),
+                "/start" => SendStartMessage(message, _tgUsersService, _botMethods, cancellationToken),
+                "/help" => Help(message, _botMethods, cancellationToken),
+                "/status" => Status(message, _botMethods, _dbContext, cancellationToken),
+                "/old" => Old(message, _botMethods, _dbContext, cancellationToken),
                 //"/inline_keyboard" => SendInlineKeyboard(_botClient, message, cancellationToken),
                 //"/keyboard" => SendReplyKeyboard(_botClient, message, cancellationToken),
                 //"/remove" => RemoveKeyboard(_botClient, message, cancellationToken),
                 //"/photo" => SendFile(_botClient, message, cancellationToken),
                 //"/request" => RequestContactAndLocation(_botClient, message, cancellationToken),
                 //"/inline_mode" => StartInlineQuery(_botClient, message, cancellationToken),
-                _ => Unknown(_botClient, message, cancellationToken)
+                _ => Unknown(message, _botMethods, cancellationToken)
             };
             Message sentMessage = await action;
             _logger.LogInformation("The message was sent with id: {SentMessageId}", sentMessage.MessageId);
 
-            static async Task<Message> SendStartMessage(ITelegramBotClient botClient, TgUsersService _tgUsersService, Message message, BotConfiguration botConfiguration, CancellationToken cancellationToken)
+            static async Task<Message> SendStartMessage(Message message, TgUsersService _tgUsersService, BotMethods botMethods, CancellationToken cancellationToken)
             {
                 if(!await _tgUsersService.CheckTgUserExistence(message.From.Id))
                     await _tgUsersService.RegistereNewUser(message.From.Id, message.Chat.Id, message.From.Username ?? "Unknown");
@@ -88,34 +94,15 @@ namespace TgHelpDesk.Services.Bot
                 //TODO: Вариативность в зависимости от статуса авторизации
 
                 string StartMessage = "Привет!\n" +
-                                      "Я HelpDesk Бот\n" +
-                                      "Воспользуйтесь кнопкой 'создать заявку' для отправки запроса\n" +
+                                      "Я Бот. Я отправлю ваш запрос IT-отделу\n" +
+                                      "Жми <u>'Новый Запрос'</u>\n" +
                                       "/help - для дополнительной информации";
 
-                await SetMenuButton(botClient, message.Chat.Id, botConfiguration.HostAddress, cancellationToken);
-
-                return await botClient.SendTextMessageAsync(
-                    chatId: message.Chat.Id,
-                    text: StartMessage,
-                    replyMarkup: new ReplyKeyboardRemove(),
-                    cancellationToken: cancellationToken);
+                await botMethods.SetMenuButton(message.Chat.Id,cancellationToken);
+                return await botMethods.SendMessageAsync(StartMessage, message.Chat.Id, cancellationToken);
             }
 
-            static async Task SetMenuButton(ITelegramBotClient botClient, long chatId, string Url, CancellationToken cancellationToken)
-            {
-                await botClient.SetChatMenuButtonAsync
-                    (chatId: chatId,
-                      menuButton: new MenuButtonWebApp
-                      {
-                          Text = "Создать запрос",
-                          WebApp = new WebAppInfo()
-                          {
-                              Url = Url,
-                          }
-                      },
-                      cancellationToken: cancellationToken);
-            }
-
+            #region NotUsed
             // Send inline keyboard
             // You can process responses in BotOnCallbackQueryReceived handler
             //static async Task<Message> SendInlineKeyboard(ITelegramBotClient botClient, Message message, CancellationToken cancellationToken)
@@ -213,38 +200,78 @@ namespace TgHelpDesk.Services.Bot
             //        replyMarkup: RequestReplyKeyboard,
             //        cancellationToken: cancellationToken);
             //}
+            #endregion
 
-            static async Task<Message> Help(ITelegramBotClient botClient, Message message, CancellationToken cancellationToken)
+            static async Task<Message> Help(Message message, BotMethods botMethods, CancellationToken cancellationToken)
             {
-                string Message = "Я HelpDesk Бот\n" +
-                                 "Используя кнопку ниже, вы можете отправить запрос на помощь от IT отдела.\n" +
-                                 "Воспользуйтесь тегами, чтобы выбрать вашу проблему, и/или опишите ее самостоятельно. \n" +
-                                 "/status - узнать о статусе моих заявок\n" +
-                                 "/old - посмотреть мои предыдущие заявки";
+                string Message = "Кнопка <u>'Новый Запрос'</u> вызовет форму запроса\n" +
+                                 "Можете добавлять теги, чтобы обозначить предметную область\n" +
+                                 "Пожалуйста, опишите задачу максимально полно\n" +
+                                 "/status - покажет статус актуальных заявок\n" +
+                                 "/old - архив ваших заявок";
 
-                return await botClient.SendTextMessageAsync(
-                    chatId: message.Chat.Id,
-                    text: Message,
-                    replyMarkup: new ReplyKeyboardRemove(),
-                    cancellationToken: cancellationToken);
+                return await botMethods.SendMessageAsync(Message, message.Chat.Id, cancellationToken);
             }
-            //static async Task<Message> Status(ITelegramBotClient botClient, Message message, CancellationToken cancellationToken)
-            //{
-                
-            //    string Message = "Заявка:  n" +
-            //                     "Используя кнопку ниже, вы можете отправить запрос на помощь от IT отдела.\n" +
-            //                     "Воспользуйтесь тегами, чтобы выбрать вашу проблему, и/или опишите ее самостоятельно. \n" +
-            //                     "/status - узнать о статусе моих заявок\n" +
-            //                     "/old - посмотреть мои предыдущие заявки";
 
-            //    return await botClient.SendTextMessageAsync(
-            //        chatId: message.Chat.Id,
-            //        text: Message,
-            //        replyMarkup: new ReplyKeyboardRemove(),
-            //        cancellationToken: cancellationToken);
-            //}
+            static async Task<Message> Status(Message message, BotMethods botMethods, TgHelpDeskDbContext tgHelpDeskDb, CancellationToken cancellationToken)
+            {
 
-            static async Task<Message> Unknown(ITelegramBotClient botClient, Message message, CancellationToken cancellationToken)
+                var Requests = await tgHelpDeskDb.HelpRequests.Include(x => x.TelegramUser).Where(x => x.TelegramUser.TelegramId == message.Chat.Id && x.Status != Models.Core.HelpRequest._Status.Completed).AsNoTracking().ToListAsync();
+                string Message = "";                             
+
+                if(Requests.Count == 0)
+                {
+                    Message = "У вас нет активных заявок";
+                }
+                else
+                {
+                    StringBuilder sb = new StringBuilder();
+                    sb.Append($"У вас {Requests.Count} активных заявок.\n");
+                    sb.Append($"<ol>");                 
+                    foreach(var request in Requests)
+                    {
+                        sb.Append($"#id{request.Id} - {request.Title}\n" +
+                            $"Отправлена: {request.CreationDateTime}" +
+                            $"Статус: {HelpRequest.GetStatus(request.Status)}");
+                    }
+                    sb.Append("</ol>");
+                    Message = sb.ToString();
+                }
+
+                return await botMethods.SendMessageAsync(Message, message.Chat.Id, cancellationToken);
+            }
+
+            static async Task<Message> Old(Message message, BotMethods botMethods, TgHelpDeskDbContext tgHelpDeskDb, CancellationToken cancellationToken)
+            {
+
+                var Requests = await tgHelpDeskDb.HelpRequests.Include(x => x.TelegramUser).Where(x => x.TelegramUser.TelegramId == message.Chat.Id && x.Status == Models.Core.HelpRequest._Status.Completed).AsNoTracking().ToListAsync();
+                string Message = "";
+
+                if (Requests.Count == 0)
+                {
+                    Message = "Вы еще не отправляли заявок";
+                }
+                else
+                {
+                    StringBuilder sb = new StringBuilder();
+                    sb.Append($"У вас {Requests.Count} завершенных заявок.\n");
+                    sb.Append($"<ol>");
+                    foreach (var request in Requests)
+                    {
+                        sb.Append($"#id{request.Id} - {request.Title}\n" +
+                            $"Отправлена: {request.CreationDateTime.ToShortDateString()}" +
+                            $"Текст: {request.Text}");
+                    }
+                    sb.Append("</ol>");
+                    Message = sb.ToString();
+                }
+
+
+
+                return await botMethods.SendMessageAsync(Message, message.Chat.Id, cancellationToken);
+            }
+
+            static async Task<Message> Unknown(Message message, BotMethods botMethods, CancellationToken cancellationToken)
             {
                 //const string usage = "Usage:\n" +
                 //                     "/inline_keyboard - send inline keyboard\n" +
@@ -254,11 +281,7 @@ namespace TgHelpDesk.Services.Bot
                 //                     "/request     - request location or contact\n" +
                 //                     "/inline_mode - send keyboard with Inline Query";
 
-                return await botClient.SendTextMessageAsync(
-                    chatId: message.Chat.Id,
-                    text: "Неизвестная команда",
-                    replyMarkup: new ReplyKeyboardRemove(),
-                    cancellationToken: cancellationToken);
+                return await botMethods.SendMessageAsync("Неизвестная команда", message.Chat.Id, cancellationToken);
             }
 
             //static async Task<Message> StartInlineQuery(ITelegramBotClient botClient, Message message, CancellationToken cancellationToken)

@@ -1,7 +1,7 @@
 ﻿using Microsoft.AspNetCore.Mvc.Filters;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Options;
-using TgHelpDesk.Models.Service;
+using TgHelpDesk.Services.Bot;
 
 namespace TgHelpDesk.Validators
 {

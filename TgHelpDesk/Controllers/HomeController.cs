@@ -1,11 +1,7 @@
 ﻿using Microsoft.AspNetCore.Authorization;
-using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
-using Telegram.Bot.Types.Enums;
 using TgHelpDesk.Models.Core;
-using TgHelpDesk.Models.Statics;
-using TgHelpDesk.Services.Bot;
-using TgHelpDesk.Services.HelpRequests;
+using TgHelpDesk.Repositories.Interface;
 using TgHelpDesk.Services.TgUsers;
 
 namespace TgHelpDesk.Controllers
@@ -13,16 +9,14 @@ namespace TgHelpDesk.Controllers
     public class HomeController : Controller
     {
         private readonly ILogger<HomeController> _logger;
-        private readonly HelpRequestsService _helpRequestsService;
+        private readonly IRepository<HelpRequest> _helpReqRepos;
         private readonly TgUsersService _tgUsersService;
-        private readonly BotMethods _botMethods;
 
-        public HomeController(ILogger<HomeController> logger, HelpRequestsService helpRequestsService, TgUsersService tgUsersService, BotMethods botMethods)
+        public HomeController(ILogger<HomeController> logger, IRepository<HelpRequest> repository, TgUsersService tgUsersService)
         {
             _logger = logger;
-            _helpRequestsService = helpRequestsService;
+            _helpReqRepos = repository;
             _tgUsersService = tgUsersService;
-            _botMethods = botMethods;
         }
 
         [HttpGet]
@@ -41,18 +35,16 @@ namespace TgHelpDesk.Controllers
             if (string.IsNullOrWhiteSpace(request.Title) || string.IsNullOrWhiteSpace(request.Title))
                 return BadRequest();
 
-            var req = await _helpRequestsService.AddHelpRequest(request.Title, request.Description, request.TgId, request.Priority);
-
-            await _botMethods.SendMessage
-                ("Ваша заявка принята.\n" +
-                $"<b>Номер заявки:</b> #id{req.Id}\n" +
-                $"<b>Тема:</b> {req.Title}\n" +
-                $"<b>Описание:</b> {req.Text}\n" +
-                $"<b>Дата подачи:</b> {req.CreationDateTime}\n" +
-                $"<b>Приоритет:</b> {req.GetPriority()}\n" +
-                $"С вами свяжутся, а о изменение статуса будет отправлено дополнительное сообщение.",
-                req.TelegramUser.TelegramId);
-
+            HelpRequest helpRequest = new()
+            {
+                TelegramUser = await _tgUsersService.GetTgUser(request.TgId),
+                Title = request.Title,
+                Text = request.Description,
+                CreationDateTime = DateTime.UtcNow,
+                Priority = (HelpRequest._Priority)request.Priority,
+                Status = HelpRequest._Status.Received
+            };
+            await _helpReqRepos.CreateAsync(helpRequest);
 
             return Ok();
         }
